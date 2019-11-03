@@ -13,13 +13,14 @@ FilterFamily = namedtuple('FilterFamily', 'family,filters,lambda_range_min,lambd
 
 @click.command()
 @click.option('--target', default=None)
-def cli(target):
+@click.option('--plotting', default=False)
+def cli(target, plotting):
     if not target:
         target = os.environ['THESIS_TARGET']
-    main(target)
+    main(target, plotting)
 
 
-def main(target):
+def main(target, plotting):
 
     # Fist, we start the context for this... "experiment"(?). We will work in a
     with context(f'./data/{target}/A_determining_filters', target=target, init=True) as ctx:
@@ -29,7 +30,8 @@ def main(target):
             lambda_range_min=400.0,
             lambda_range_max=800.0,
             lambda_width=10.0,
-            noisy_sigma=100.
+            noisy_sigma=100.,
+            do_plots=plotting
         )
 
         #analysis_for_filter_family_params(

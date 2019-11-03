@@ -13,7 +13,7 @@ setup(
     packages=['msc_thesis'],
     entry_points={
         'console_scripts': [
-            'thesis-A = msc_thesis.stages.A_determining_filters.determining_filters:cli'
+            'msc-A = msc_thesis.stages.A_determining_filters.determining_filters:cli'
         ]
     },
     install_requires=[
