@@ -10,7 +10,7 @@ from setuptools import setup
 setup(
     name='msc_thesis',
     version='0.1',
-    packages=['thesis_code'],
+    packages=['msc_thesis'],
     entry_points={
         'console_scripts': [
             'thesis-A = msc_thesis.stages.A_determining_filters.determining_filters:cli'
