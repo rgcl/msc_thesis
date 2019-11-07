@@ -25,9 +25,9 @@ determining_filters = {
         },
         'sed_modules_params': {
             'sfhdelayedbq': {
-                'tau_main': [2000, 4000],
+                'tau_main': [2000],
                 'age_main': 13000,
-                'age_bq': [200.0, 500.0],
+                'age_bq': [200.0],
                 'r_sfr': [2.50, 10.],
                 'sfr_A': 1.0,
                 'normalise': True
@@ -45,12 +45,12 @@ determining_filters = {
                 'emission': True
             },
             'dustatt_modified_starburst': {
-                'E_BV_lines': [.05, .6, .8],
-                'E_BV_factor': [.25, .5, .75],
+                'E_BV_lines': [.05, ],
+                'E_BV_factor': [.25, .5],
                 'uv_bump_wavelength': 217.5,
                 'uv_bump_width': 35.0,
                 'uv_bump_amplitude': 3.0,
-                'powerlaw_slope': [-1.2, -.1, .2],
+                'powerlaw_slope': [-.1, .2],
                 'Ext_law_emission_lines': 1,
                 'Rv': 3.1,
                 'filters': 'B_B90 & V_B90 & FUV',

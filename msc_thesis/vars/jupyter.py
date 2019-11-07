@@ -1,3 +1,14 @@
+
+properties_of_interest = [
+    'attenuation.powerlaw_slope',
+    'attenuation.FUV',
+    'sfh.sfr',
+    'dust.luminosity',
+    'stellar.m_star'
+]
+
+number_of_noises = 60
+
 determining_filters = {
     'pcigale_init': {
         'sed_modules': [
@@ -14,32 +25,34 @@ determining_filters = {
         },
         'sed_modules_params': {
             'sfhdelayedbq': {
-                'tau_main': 2000.0,
-                'age_main': 5000,
-                'age_bq': 500.0,
-                'r_sfr': 0.1,
+                'tau_main': [1, 2000, 4000, 6000, 8000, 10000],
+                'age_main': 13000,
+                'age_bq': [10., 50., 100.0, 200.0, 300.0, 400.0, 500.0],
+                'r_sfr': [0., .5, 1., 2.50, 5., 10.],
                 'sfr_A': 1.0,
                 'normalise': True
             },
             'bc03': {
-                'imf': 0,
+                'imf': 1,
                 'metallicity': 0.02,
                 'separation_age': 10
             },
             'nebular': {
-                'logU': -2.0,
+                'logU': -3.0,
                 'f_esc': 0.0,
                 'f_dust': 0.0,
                 'lines_width': 300.0,
                 'emission': True
             },
             'dustatt_modified_starburst': {
-                'E_BV_lines': [0.5, 0.3],
-                'E_BV_factor': 0.44,
+                'E_BV_lines': [.05, .1, .15, .2, .25, .3, .35, .4, .45,
+                               .5, .55, .6, .65, .7, .75, .8],
+                'E_BV_factor': [.25, .5, .75],
                 'uv_bump_wavelength': 217.5,
                 'uv_bump_width': 35.0,
-                'uv_bump_amplitude': 0.0,
-                'powerlaw_slope': 0.0,
+                'uv_bump_amplitude': 3.0,
+                'powerlaw_slope': [-1.2, -1.1, -1., -.9, -.8, -.7, -.6,
+                                   -.5, -.4, -.3, -.2, -.1, 0.,.1, .2],
                 'Ext_law_emission_lines': 1,
                 'Rv': 3.1,
                 'filters': 'B_B90 & V_B90 & FUV',

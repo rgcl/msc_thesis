@@ -32,7 +32,7 @@ Env: Python 3.6 or upper.
 
 See msc_thesis/setup.py for the new commands. Current commands:
 
-``$ msc_thesis-A`` Perform the stage A for the investigation: Selecting the optimal filters parameters.
+``$ msc-A [--target <target>] [--plotting]`` Perform the stage A for the investigation: Selecting the optimal filters parameters.
 
 ### Uninstallation
 
@@ -43,3 +43,11 @@ This is optional.
 ```sql
 delete from filters where name like '%thesis_filter%';
 ```
+
+---------------------------------------------------------------------
+
+
+_Un aporte de la UA al desarrollo sustentable de la Región de Antofagasta, a
+través de la transferencia científica y tecnológica hacia los sectores
+productivos, social y medioambiental._
+PROYECTO ANT 1795, Universidad de Antofagasta. Chile.

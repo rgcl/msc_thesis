@@ -7,13 +7,26 @@ import click
 from collections import namedtuple
 from astropy.table import Table
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from ...radarplot import radar_factory
+
+
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, RegularPolygon
+from matplotlib.path import Path
+from matplotlib.projections.polar import PolarAxes
+from matplotlib.projections import register_projection
+from matplotlib.spines import Spine
+from matplotlib.transforms import Affine2D
 
 FilterFamily = namedtuple('FilterFamily', 'family,filters,lambda_range_min,lambda_range_max,lambda_width')
 
+def minmax(el, v):
+    return (el - np.min(v)) / (np.max(v) - np.min(v)) if np.max(v) - np.min(v) is not 0 else 0
 
 @click.command()
 @click.option('--target', default=None)
-@click.option('--plotting', default=False)
+@click.option('--plotting', is_flag=True)
 def cli(target, plotting):
     if not target:
         target = os.environ['THESIS_TARGET']
@@ -34,25 +47,25 @@ def main(target, plotting):
             do_plots=plotting
         )
 
-        #analysis_for_filter_family_params(
-        #    target,
-        #    lambda_range_min=200.0,
-        #    lambda_range_max=1200.0,
-        #    lambda_width=5.0,
-        #    noisy_sigma=100.
-        #)
+        analysis_for_filter_family_params(
+            target,
+            lambda_range_min=200.0,
+            lambda_range_max=1200.0,
+            lambda_width=5.0,
+            noisy_sigma=100.
+        )
 
-        #analysis_for_filter_family_params(
-        #    target,
-        #    lambda_range_min=400.0,
-        #    lambda_range_max=800.0,
-        #    lambda_width=30.0,
-        #    noisy_sigma=100.
-        #)
+        analysis_for_filter_family_params(
+            target,
+            lambda_range_min=400.0,
+            lambda_range_max=800.0,
+            lambda_width=30.0,
+            noisy_sigma=100.
+        )
 
 
 def analysis_for_filter_family_params(
-        target, lambda_range_min, lambda_range_max, lambda_width, noisy_sigma=1., noises_samples=10., do_plots=False):
+        target, lambda_range_min, lambda_range_max, lambda_width, noisy_sigma=1., do_plots=False):
 
     with context(f'./{lambda_range_min}_{lambda_range_max}_{lambda_width}', target) as ctx:
 
@@ -64,21 +77,48 @@ def analysis_for_filter_family_params(
         )
 
         # using pcigale to create sintetic models of galaxies
-        models = make_canonic_models(ctx, filter_family, save_sed=do_plots)
+        print("making canonical models")
+        models = make_canonical_models(ctx, filter_family, save_sed=do_plots)
 
         # plotting if requested
         if do_plots:
             plot_filter_family(ctx, models[0], lambda_range_min, lambda_range_max, lambda_width, filter_family)
 
         # make the noised version of the canonical models
-        models_noised = noisyfy_models(ctx, models, filter_family, noisy_sigma, noises_samples=noises_samples)
+        print("noising models")
+        noised_models = noisyfy_models(ctx, models, filter_family, noisy_sigma)
 
         # determine the props from the derived data
-        models_resolved = analyse_noised_models(ctx, filter_family, models_noised)
+        noised_models_predicted = predict_for_noised_models(ctx, filter_family, noised_models)
 
-        #
-        r = determine_filter_family_error(ctx, models, models_resolved)
-        print(r)
+        # calculate the residuals
+        global_mse, master = calculate_noised_models_prediction_mse(ctx, models, noised_models_predicted)
+
+        theta = radar_factory(len(global_mse), frame='polygon')
+
+        fig, ax = plt.subplots(figsize=(9, 9), nrows=1, ncols=1, subplot_kw=dict(projection='radar'))
+        #fig.subplots_adjust(wspace=0.25, hspace=0.20, top=0.85, bottom=0.05)
+        colors = ['b', 'r', 'g', 'm', 'y']
+
+        print('+++++++++++++++++++++++')
+        print(theta)
+        print(global_mse.values())
+
+        total_error = np.mean(list(global_mse.values()))
+
+        ax.set_title('Mean Error for $\lambda_{width}$=' + str(lambda_width) + f'nm: {total_error:.2f}', weight='bold')
+
+        # normalising the error
+        err_val = list(global_mse.values())
+        err_val = [minmax(val, err_val) for val in err_val]
+
+        print(err_val)
+
+        ax.plot(theta, err_val)
+        ax.fill(theta, err_val)
+        ax.set_varlabels(list(global_mse.keys()))
+        #plt.show()
+        plt.savefig(f'mse_{filter_family.family}.svg')
 
 
 def create_filter_family(lambda_range_min, lambda_range_max, lambda_width):
@@ -122,7 +162,7 @@ def create_filter_family(lambda_range_min, lambda_range_max, lambda_width):
     return FilterFamily(family_name, np.array(filters), lambda_range_min, lambda_range_max, lambda_width)
 
 
-def make_canonic_models(ctx, filter_family, save_sed=False):
+def make_canonical_models(ctx, filter_family, save_sed=False):
     """
     Uses pcigale to generate synthetic data from models. Each model represent a galaxy, with the fluxes in the
     given filter_family filters.
@@ -151,22 +191,23 @@ def make_canonic_models(ctx, filter_family, save_sed=False):
         return Table.read('out/models-block-0.fits')
 
 
-def noisyfy_models(ctx, models, filter_family, noisy_sigma, noises_samples):
+def noisyfy_models(ctx, models, filter_family, noisy_sigma):
     """
 
     :param models:
     :param filter_family:
-    :param noises_samples: number of noised clones of the original model.
+    :param noisy_sigma:
     :return:
     """
+    number_of_noises = ctx.vars.number_of_noises
     redshift = models[0]['universe.redshift']
-    noised_table = Table(
+    noised_models = Table(
         names=('id', *[f.name for f in filter_family.filters], 'redshift'),
         dtype=('<U60', *np.repeat('f4', len(filter_family.filters)), 'f4')
     )
     for model in models:
-        for noisy_i in range(int(noises_samples)):
-            noised_table.add_row((
+        for noisy_i in range(number_of_noises):
+            noised_models.add_row((
                 f'noised_{model["id"]}_{noisy_i}',
                 *[
                     model[f.name] + np.random.normal(0, noisy_sigma)
@@ -174,21 +215,21 @@ def noisyfy_models(ctx, models, filter_family, noisy_sigma, noises_samples):
                 ],
                 redshift
             ))
-    return noised_table
+    return noised_models
 
 
-def analyse_noised_models(ctx, filter_family, noised_table):
+def predict_for_noised_models(ctx, filter_family, noised_models):
     """
 
     :param ctx:
     :param filter_family:
-    :param noised_table:
-    :return:
+    :param noised_models:
+    :return: Table
     """
 
     with context('noised', ctx.target):
         noised_table_filename = 'data_file.txt'
-        noised_table.write(noised_table_filename, format='ascii.fixed_width', delimiter=None)
+        noised_models.write(noised_table_filename, format='ascii.fixed_width', delimiter=None)
 
         determining_filters = ctx.vars.determining_filters
         properties_of_interest = ctx.vars.properties_of_interest
@@ -209,13 +250,55 @@ def analyse_noised_models(ctx, filter_family, noised_table):
         })
         call('pcigale run')
 
-        return Table.read('out/models_resolved.txt', format='ascii')
+        return Table.read('out/results.fits')
 
 
-def determine_filter_family_error(ctx, models, models_resolved):
+def calculate_noised_models_prediction_mse(ctx, models, noised_models_prediction):
+    """
+
+    :param ctx:
+    :param models: astropy.table.Table
+    :param noised_models_prediction: astropy.table.Table
+    :return:
+    """
     properties_of_interest = ctx.vars.properties_of_interest
 
-    r = [models_resolved[f'best.{prop}'] for prop in properties_of_interest]
+    master = Table(
+        names=(
+            'model_id',
+            'model_id_noised',
+            *properties_of_interest,
+            *[f'{prop}_predicted' for prop in properties_of_interest]
+        ),
+        dtype=('<U60', '<U60', *np.repeat('f8', len(properties_of_interest) * 2))
+    )
+    # complete the master table
+    model_ids = models['id'].data
+    for noised_model_prediction in noised_models_prediction:
+        model_id_noised = noised_model_prediction['id']
+        model_id = model_id_noised.split('_')[1]
+        i, = np.where(model_ids == int(model_id))
+        canonical_model = models[i]
+
+        master.add_row((
+            model_id,
+            model_id_noised,
+            *[canonical_model[prop] for prop in properties_of_interest],
+            *[noised_model_prediction[f'best.{prop}'] for prop in properties_of_interest]
+        ))
+
+    # save the tables
+    master.write('master.fits')
+
+    # MSE calculated with all the galaxies # todo nrmse
+    rtmse = {
+        prop: np.sqrt(
+            np.mean(np.square(master[f'{prop}_predicted'] - master[prop]))
+        ) / (np.quantile(master[prop], .75) - np.quantile(master[prop], .25))
+        for prop in properties_of_interest
+    }
+
+    return rtmse, master
 
 
 def plot_filter_family(ctx, model, lambda_range_min, lambda_range_max, lambda_width, filter_family):
