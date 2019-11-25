@@ -45,7 +45,19 @@ and .owd means "old working directory", that is the previous directory. This obj
 with context(dir,target) as ctx:
     pass
 """
-Context = namedtuple('Context', 'vars,owd,path,target,makedir,init')
+#Context = namedtuple('Context', 'vars,owd,path,target,makedir,init')
+class Context:
+    def __init__(self, vars, owd, path, target, makedir, init):
+        self.vars = vars; self.owd = owd; self.path = path; self.target = target
+        self.makedir = makedir; self.init = init
+
+    def using(self, path, target=False, makedir=True, init=False):
+        return context(
+            path,
+            target if target else self.target,
+            makedir if makedir else self.makedir,
+            init if init else self.init
+        )
 
 
 class context:

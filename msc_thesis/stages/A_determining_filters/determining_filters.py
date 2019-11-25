@@ -11,18 +11,12 @@ from sklearn.preprocessing import MinMaxScaler
 from ...radarplot import radar_factory
 
 
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, RegularPolygon
-from matplotlib.path import Path
-from matplotlib.projections.polar import PolarAxes
-from matplotlib.projections import register_projection
-from matplotlib.spines import Spine
-from matplotlib.transforms import Affine2D
-
 FilterFamily = namedtuple('FilterFamily', 'family,filters,lambda_range_min,lambda_range_max,lambda_width')
+
 
 def minmax(el, v):
     return (el - np.min(v)) / (np.max(v) - np.min(v)) if np.max(v) - np.min(v) is not 0 else 0
+
 
 @click.command()
 @click.option('--target', default=None)
@@ -37,31 +31,61 @@ def main(target, plotting):
 
     # Fist, we start the context for this... "experiment"(?). We will work in a
     with context(f'./data/{target}/A_determining_filters', target=target, init=True) as ctx:
+        properties_of_interest = ctx.vars.properties_of_interest
 
-        analysis_for_filter_family_params(
-            target,
-            lambda_range_min=400.0,
-            lambda_range_max=800.0,
-            lambda_width=10.0,
-            noisy_sigma=100.,
-            do_plots=plotting
-        )
+        errors = {}
+        errors_by_prop = {prop: {} for prop in properties_of_interest}
+        for bin in np.arange(2., 8., step=1.):
+            error, error_by_prop, master = analysis_for_filter_family_params(
+                target,
+                lambda_range_min=400.0,
+                lambda_range_max=800.0,
+                lambda_width=bin,
+                noisy_sigma=1.,
+                do_plots=plotting
+            )
+            errors[bin] = error
+            for prop in properties_of_interest:
+                errors_by_prop[prop][bin] = error_by_prop[prop]
 
-        analysis_for_filter_family_params(
-            target,
-            lambda_range_min=200.0,
-            lambda_range_max=1200.0,
-            lambda_width=5.0,
-            noisy_sigma=100.
-        )
+        print("final errors")
+        print(errors)
 
-        analysis_for_filter_family_params(
-            target,
-            lambda_range_min=400.0,
-            lambda_range_max=800.0,
-            lambda_width=30.0,
-            noisy_sigma=100.
-        )
+        print("final errors bt prop"),
+        print(errors_by_prop)
+
+        plt.figure()
+        plt.plot(list(errors.keys()), list(errors.values()), '.')
+        plt.xlabel('$\lambda$ (nm)')
+        plt.ylabel('Relative residuals')
+        plt.savefig('general_error.svg')
+
+        plt.figure()
+        for prop in properties_of_interest:
+            plt.plot(list(errors_by_prop[prop].keys()), list(errors_by_prop[prop].values()), '.', label=prop)
+        plt.xlabel('$\lambda$ (nm)')
+        plt.ylabel('Relative residuals')
+        plt.legend()
+        plt.savefig('error_by_prop.svg')
+
+        #np.savetxt('errors.npy', errors)
+        #np.savetxt('errors_by_prop.npy', errors_by_prop)
+
+        #analysis_for_filter_family_params(
+#            target,
+#            lambda_range_min=200.0,
+#            lambda_range_max=1200.0,
+#            lambda_width=5.0,
+#            noisy_sigma=1.
+#        )
+
+#        analysis_for_filter_family_params(
+#            target,
+#            lambda_range_min=400.0,
+#            lambda_range_max=800.0,
+#            lambda_width=30.0,
+#            noisy_sigma=1.
+#        )
 
 
 def analysis_for_filter_family_params(
@@ -92,33 +116,29 @@ def analysis_for_filter_family_params(
         noised_models_predicted = predict_for_noised_models(ctx, filter_family, noised_models)
 
         # calculate the residuals
-        global_mse, master = calculate_noised_models_prediction_mse(ctx, models, noised_models_predicted)
+        error_by_prop, master = calculate_noised_models_prediction_mse(ctx, models, noised_models_predicted)
 
-        theta = radar_factory(len(global_mse), frame='polygon')
+        theta = radar_factory(len(error_by_prop), frame='polygon')
 
         fig, ax = plt.subplots(figsize=(9, 9), nrows=1, ncols=1, subplot_kw=dict(projection='radar'))
-        #fig.subplots_adjust(wspace=0.25, hspace=0.20, top=0.85, bottom=0.05)
         colors = ['b', 'r', 'g', 'm', 'y']
 
-        print('+++++++++++++++++++++++')
-        print(theta)
-        print(global_mse.values())
+        error = np.mean(list(error_by_prop.values()))
 
-        total_error = np.mean(list(global_mse.values()))
-
-        ax.set_title('Mean Error for $\lambda_{width}$=' + str(lambda_width) + f'nm: {total_error:.2f}', weight='bold')
+        ax.set_title('Mean Error for $\lambda_{width}$=' + str(lambda_width) + f'nm: {error:.2E}', weight='bold')
 
         # normalising the error
-        err_val = list(global_mse.values())
+        err_val = list(error_by_prop.values())
         err_val = [minmax(val, err_val) for val in err_val]
 
         print(err_val)
 
         ax.plot(theta, err_val)
         ax.fill(theta, err_val)
-        ax.set_varlabels(list(global_mse.keys()))
-        #plt.show()
+        ax.set_varlabels(list(error_by_prop.keys()))
         plt.savefig(f'mse_{filter_family.family}.svg')
+
+        return error, error_by_prop, master
 
 
 def create_filter_family(lambda_range_min, lambda_range_max, lambda_width):
@@ -185,6 +205,7 @@ def make_canonical_models(ctx, filter_family, save_sed=False):
             },
             'bands': [f.name for f in filter_family.filters]
         })
+        print('Run pcigale to compute the modules')
         call('pcigale run')
 
         # this is the generated models catalog with the properties as columns.

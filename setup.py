@@ -13,7 +13,8 @@ setup(
     packages=['msc_thesis'],
     entry_points={
         'console_scripts': [
-            'msc-A = msc_thesis.stages.A_determining_filters.determining_filters:cli'
+            'msc-A = msc_thesis.stages.A_determining_filters.determining_filters:cli',
+            'msc-201 = msc_thesis.stages.200_creating_big_catalog._201_creating_big_catalog:cli'
         ]
     },
     install_requires=[
